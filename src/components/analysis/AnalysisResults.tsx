@@ -14,7 +14,8 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, onBack
     const [confidenceMap, setConfidenceMap] = useState<Record<string, 'know' | 'practice'>>(
         result.skillConfidenceMap || {}
     );
-    const [currentScore, setCurrentScore] = useState(result.readinessScore);
+    // Use finalScore if available, otherwise readinessScore (backward compat)
+    const [currentScore, setCurrentScore] = useState(result.finalScore !== undefined ? result.finalScore : result.readinessScore);
     const [baseScore] = useState(result.baseScore || result.readinessScore);
 
     useEffect(() => {
@@ -33,11 +34,12 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, onBack
         const updatedResult = {
             ...result,
             skillConfidenceMap: confidenceMap,
-            readinessScore: newScore,
+            finalScore: newScore, // Update finalScore
+            readinessScore: newScore, // Keep legacy field in sync
             baseScore // Ensure baseScore is preserved
         };
         updateAnalysis(updatedResult);
-    }, [confidenceMap, baseScore, result]);
+    }, [confidenceMap, baseScore, result.id]); // Removed result object from dependency to avoid loops, used result.id instead
 
     const toggleSkill = (skill: string) => {
         setConfidenceMap(prev => {

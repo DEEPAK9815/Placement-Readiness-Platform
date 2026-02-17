@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-export type SkillCategory = 'Core CS' | 'Languages' | 'Web' | 'Data' | 'Cloud/DevOps' | 'Testing';
+export type SkillCategory = 'Core CS' | 'Languages' | 'Web' | 'Data' | 'Cloud/DevOps' | 'Testing' | 'Other';
 
 export type CompanySize = 'Startup' | 'Mid-size' | 'Enterprise';
 
@@ -23,13 +23,15 @@ export interface RoundInfo {
 export interface AnalysisResult {
     id: string;
     createdAt: string; // ISO string
+    updatedAt: string; // ISO string
     role: string;
     company: string;
     jdText: string;
     extractedSkills: Record<SkillCategory, string[]>;
-    readinessScore: number;
-    baseScore?: number; // Store original calculated score
-    skillConfidenceMap?: Record<string, 'know' | 'practice'>; // User self-assessment
+    readinessScore: number; // Deprecated in favor of finalScore, kept for backward compat if needed or just alias baseScore
+    baseScore: number; // Store original calculated score
+    finalScore: number; // The score displayed to the user
+    skillConfidenceMap: Record<string, 'know' | 'practice'>; // User self-assessment
     companyIntel?: CompanyIntel;
     roundFlow?: RoundInfo[];
     plan: { day: number; focus: string; activities: string[] }[];
@@ -42,17 +44,18 @@ export function updateAnalysis(updatedResult: AnalysisResult) {
     const index = history.findIndex(item => item.id === updatedResult.id);
 
     if (index !== -1) {
+        updatedResult.updatedAt = new Date().toISOString();
         history[index] = updatedResult;
         localStorage.setItem('job_history', JSON.stringify(history));
 
         // If this is the most recent one, update the latest score
         if (index === 0) {
-            localStorage.setItem('latest_readiness_score', updatedResult.readinessScore.toString());
+            localStorage.setItem('latest_readiness_score', updatedResult.finalScore.toString());
         }
     }
 }
 
-const KEYWORDS: Record<SkillCategory, string[]> = {
+const KEYWORDS: Record<Exclude<SkillCategory, 'Other'>, string[]> = {
     'Core CS': ['DSA', 'Data Structures', 'Algorithms', 'OOP', 'Object Oriented', 'DBMS', 'Database Management', 'OS', 'Operating Systems', 'Networks', 'Computer Networks'],
     'Languages': ['Java', 'Python', 'JavaScript', 'TypeScript', 'C\\+\\+', 'C#', 'Golang', 'Go', 'Rust', 'Ruby', 'Swift', 'Kotlin'],
     'Web': ['React', 'Next.js', 'Node.js', 'Express', 'REST', 'GraphQL', 'HTML', 'CSS', 'Tailwind', 'Redux', 'Vue', 'Angular'],
@@ -73,10 +76,12 @@ export function extractSkills(text: string): Record<SkillCategory, string[]> {
         'Web': [],
         'Data': [],
         'Cloud/DevOps': [],
-        'Testing': []
+        'Testing': [],
+        'Other': []
     };
 
     const lowerText = text.toLowerCase();
+    let hasSkills = false;
 
     Object.entries(KEYWORDS).forEach(([category, skills]) => {
         skills.forEach(skill => {
@@ -90,9 +95,15 @@ export function extractSkills(text: string): Record<SkillCategory, string[]> {
             const regex = new RegExp(regexPattern, 'i');
             if (regex.test(lowerText)) {
                 extracted[category as SkillCategory].push(skill.replace(/\\/g, ''));
+                hasSkills = true;
             }
         });
     });
+
+    // Fallback if no skills detected
+    if (!hasSkills) {
+        extracted['Other'] = ["Communication", "Problem Solving", "Basic Coding", "Projects"];
+    }
 
     return extracted;
 }
@@ -239,9 +250,9 @@ export function generateRoundFlow(size: CompanySize, skills: Record<SkillCategor
 }
 
 export function generatePlan(skills: Record<SkillCategory, string[]>): { day: number; focus: string; activities: string[] }[] {
-    const hasWeb = skills['Web'].length > 0;
-    const hasData = skills['Data'].length > 0;
-    const hasCloud = skills['Cloud/DevOps'].length > 0;
+    const hasWeb = skills['Web']?.length > 0;
+    const hasData = skills['Data']?.length > 0;
+    const hasCloud = skills['Cloud/DevOps']?.length > 0;
 
     const plan = [
         { day: 1, focus: "Foundations & Core CS", activities: ["Review OOP concepts", "Revise OS scheduling & memory management", "Network protocols (HTTP, TCP/IP)"] },
@@ -353,15 +364,20 @@ export function analyzeJobDescription(text: string, role: string, company: strin
     const companyIntel = generateCompanyIntel(company);
     const roundFlow = generateRoundFlow(companyIntel.size, extractedSkills);
 
+    const now = new Date().toISOString();
+
     const result: AnalysisResult = {
         id: uuidv4(),
-        createdAt: new Date().toISOString(),
-        role,
-        company,
+        createdAt: now,
+        updatedAt: now,
+        role: role || "",
+        company: company || "",
         jdText: text,
         extractedSkills,
-        readinessScore: score,
-        baseScore: score, // Initialize baseScore
+        readinessScore: score, // alias
+        baseScore: score,
+        finalScore: score,
+        skillConfidenceMap: {},
         companyIntel,
         roundFlow,
         plan,
@@ -378,13 +394,17 @@ export function saveAnalysis(result: AnalysisResult) {
     history.unshift(result);
     if (history.length > 50) history.pop();
     localStorage.setItem('job_history', JSON.stringify(history));
-    localStorage.setItem('latest_readiness_score', result.readinessScore.toString());
+    localStorage.setItem('latest_readiness_score', result.finalScore.toString());
 }
 
 export function getHistory(): AnalysisResult[] {
     try {
         const stored = localStorage.getItem('job_history');
-        return stored ? JSON.parse(stored) : [];
+        if (!stored) return [];
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed)) return [];
+        // Filter out malformed entries (must have id and scores)
+        return parsed.filter((item: any) => item && item.id && (typeof item.baseScore === 'number' || typeof item.readinessScore === 'number'));
     } catch (e) {
         console.error("Failed to parse history", e);
         return [];
