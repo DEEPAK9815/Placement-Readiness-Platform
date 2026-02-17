@@ -2,6 +2,24 @@ import { v4 as uuidv4 } from 'uuid';
 
 export type SkillCategory = 'Core CS' | 'Languages' | 'Web' | 'Data' | 'Cloud/DevOps' | 'Testing';
 
+export type CompanySize = 'Startup' | 'Mid-size' | 'Enterprise';
+
+export interface CompanyIntel {
+    name: string;
+    industry: string;
+    size: CompanySize;
+    focus: string;
+    description: string;
+}
+
+export interface RoundInfo {
+    order: number;
+    title: string;
+    description: string;
+    focus: string;
+    whyItMatters: string;
+}
+
 export interface AnalysisResult {
     id: string;
     createdAt: string; // ISO string
@@ -12,6 +30,8 @@ export interface AnalysisResult {
     readinessScore: number;
     baseScore?: number; // Store original calculated score
     skillConfidenceMap?: Record<string, 'know' | 'practice'>; // User self-assessment
+    companyIntel?: CompanyIntel;
+    roundFlow?: RoundInfo[];
     plan: { day: number; focus: string; activities: string[] }[];
     checklist: { round: string; items: string[] }[];
     questions: string[];
@@ -34,7 +54,7 @@ export function updateAnalysis(updatedResult: AnalysisResult) {
 
 const KEYWORDS: Record<SkillCategory, string[]> = {
     'Core CS': ['DSA', 'Data Structures', 'Algorithms', 'OOP', 'Object Oriented', 'DBMS', 'Database Management', 'OS', 'Operating Systems', 'Networks', 'Computer Networks'],
-    'Languages': ['Java', 'Python', 'JavaScript', 'TypeScript', 'C\\+\\+', 'C#', 'Golang', 'Go', 'Rust', 'Ruby', 'Swift', 'Kotlin'], // C\\+\\+ for regex safety if needed, though simple includes check is usually better for simple matching, but we'll use regex for word boundaries
+    'Languages': ['Java', 'Python', 'JavaScript', 'TypeScript', 'C\\+\\+', 'C#', 'Golang', 'Go', 'Rust', 'Ruby', 'Swift', 'Kotlin'],
     'Web': ['React', 'Next.js', 'Node.js', 'Express', 'REST', 'GraphQL', 'HTML', 'CSS', 'Tailwind', 'Redux', 'Vue', 'Angular'],
     'Data': ['SQL', 'MongoDB', 'PostgreSQL', 'MySQL', 'Redis', 'NoSQL', 'Cassandra', 'Elasticsearch'],
     'Cloud/DevOps': ['AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'CI/CD', 'Linux', 'Jenkins', 'Terraform'],
@@ -60,17 +80,15 @@ export function extractSkills(text: string): Record<SkillCategory, string[]> {
 
     Object.entries(KEYWORDS).forEach(([category, skills]) => {
         skills.forEach(skill => {
-            // Special handling for C++ and C# to avoid partial matches on 'C'
             let regexPattern = '';
             if (skill === 'C++') regexPattern = 'c\\+\\+';
             else if (skill === 'C#') regexPattern = 'c#';
-            else if (skill === 'C') regexPattern = '\\bc\\b'; // Word boundary for C
+            else if (skill === 'C') regexPattern = '\\bc\\b';
             else if (skill === 'Go') regexPattern = '\\bgo\\b';
             else regexPattern = escapeRegExp(skill);
 
             const regex = new RegExp(regexPattern, 'i');
             if (regex.test(lowerText)) {
-                // Store the canonical casing from KEYWORDS
                 extracted[category as SkillCategory].push(skill.replace(/\\/g, ''));
             }
         });
@@ -87,20 +105,137 @@ export function calculateScore(
 ): number {
     let score = 35; // Base score
 
-    // +5 per detected category present
     const categoriesPresent = Object.values(skills).filter(list => list.length > 0).length;
     score += Math.min(categoriesPresent * 5, 30);
 
-    // +10 if company provided
     if (company.trim().length > 0) score += 10;
-
-    // +10 if role provided
     if (role.trim().length > 0) score += 10;
-
-    // +10 if JD length > 800 chars
     if (text.length > 800) score += 10;
 
     return Math.min(score, 100);
+}
+
+// Heuristic Rules for Company Intel
+function getCompanySize(name: string): CompanySize {
+    const enterpriseList = ['Google', 'Microsoft', 'Amazon', 'Meta', 'Netflix', 'Apple', 'TCS', 'Infosys', 'Wipro', 'Accenture', 'IBM', 'Oracle', 'Salesforce', 'Adobe', 'Uber', 'Intel', 'Cisco', 'Deloitte', 'PwC', 'KPMG', 'EY'];
+    const midSizeList = ['Zoho', 'Freshworks', 'Zerodha', 'Razorpay', 'Swiggy', 'Zomato', 'Cred', 'Meesho', 'Flipkart'];
+
+    const lowerName = name.toLowerCase();
+
+    if (enterpriseList.some(e => lowerName.includes(e.toLowerCase()))) return 'Enterprise';
+    if (midSizeList.some(m => lowerName.includes(m.toLowerCase()))) return 'Mid-size';
+
+    return 'Startup'; // Default
+}
+
+export function generateCompanyIntel(name: string): CompanyIntel {
+    const size = getCompanySize(name);
+    let industry = 'Technology';
+    let focus = '';
+    let description = '';
+
+    if (size === 'Enterprise') {
+        focus = 'DSA & Core CS Fundamentals';
+        description = 'Large organizations value strong problem-solving skills (DSA) and a solid grasp of computer science fundamentals over specific framework knowledge.';
+    } else if (size === 'Mid-size') {
+        focus = 'Scalability & System Design';
+        description = 'Mid-sized growth companies look for engineers who can build scalable systems and have practical experience with modern stacks.';
+    } else {
+        focus = 'Product Building & Agility';
+        description = 'Startups prioritize valid product-building skills. They need you to be hands-on with the stack and able to ship features quickly.';
+    }
+
+    return {
+        name,
+        industry,
+        size,
+        focus,
+        description
+    };
+}
+
+export function generateRoundFlow(size: CompanySize, skills: Record<SkillCategory, string[]>): RoundInfo[] {
+    const rounds: RoundInfo[] = [];
+    const allSkills = Object.values(skills).flat();
+    const hasDSA = allSkills.includes('DSA') || allSkills.includes('Data Structures') || allSkills.includes('Algorithms');
+
+    let order = 1;
+
+    // Round 1
+    if (size === 'Enterprise' || hasDSA) {
+        rounds.push({
+            order: order++,
+            title: 'Online Coding Assessment',
+            description: 'Timed algorithmic challenges on platform like HackerRank/CodeSignal.',
+            focus: 'Arrays, Strings, HashMaps, Aptitude',
+            whyItMatters: 'Filters candidates based on raw problem-solving speed and accuracy.'
+        });
+    } else {
+        rounds.push({
+            order: order++,
+            title: 'Practical Screening',
+            description: 'Take-home assignment or basic coding checks.',
+            focus: 'Basic API creation, simple UI implementation',
+            whyItMatters: 'Verifies you can actually write code and follow instructions.'
+        });
+    }
+
+    // Round 2
+    if (size === 'Enterprise') {
+        rounds.push({
+            order: order++,
+            title: 'Technical Round 1 (DSA)',
+            description: 'Deep dive into data structures and optimization.',
+            focus: 'Trees, Graphs, DP, Time Complexity',
+            whyItMatters: 'Tests your ability to write efficient, scalable code.'
+        });
+    } else {
+        rounds.push({
+            order: order++,
+            title: 'Technical Deep Dive',
+            description: 'Discussion on your stack proficiency and past projects.',
+            focus: 'Framework internals (e.g., React hooks, Node event loop)',
+            whyItMatters: 'Proves you understand the tools you use daily.'
+        });
+    }
+
+    // Round 3
+    if (size === 'Enterprise') {
+        rounds.push({
+            order: order++,
+            title: 'Technical Round 2 (Design/CS)',
+            description: 'System design basics (LLD) or OS/DBMS concepts.',
+            focus: 'Class design, Database normalization, Schema',
+            whyItMatters: 'Ensures you can design maintainable software, not just scripts.'
+        });
+    } else if (size === 'Mid-size') {
+        rounds.push({
+            order: order++,
+            title: 'System Design / Architecture',
+            description: 'Designing a scalable feature or service.',
+            focus: 'Load balancing, Caching, API Design',
+            whyItMatters: 'Assess if you can build systems that grow with the user base.'
+        });
+    } else {
+        rounds.push({
+            order: order++,
+            title: 'Machine Coding / Pairing',
+            description: 'Live coding a feature with the interviewer.',
+            focus: 'Debuggability, Code quality, Communication',
+            whyItMatters: 'Simulates what it\'s like to work with you on a real task.'
+        });
+    }
+
+    // Round 4
+    rounds.push({
+        order: order++,
+        title: 'Managerial / Culture Fit',
+        description: 'Behavioral questions and team alignment.',
+        focus: 'Ownership, conflicts, motivation',
+        whyItMatters: 'Determines if you add value to the team culture.'
+    });
+
+    return rounds;
 }
 
 export function generatePlan(skills: Record<SkillCategory, string[]>): { day: number; focus: string; activities: string[] }[] {
@@ -118,7 +253,6 @@ export function generatePlan(skills: Record<SkillCategory, string[]>): { day: nu
         { day: 7, focus: "Final Revision", activities: ["Review weak areas", "Formula sheets", "Cheatsheets", "Rest & Mindset"] }
     ];
 
-    // Customize based on skills
     if (hasWeb) {
         plan[4].activities.push("Revise React/Node.js lifecycle & patterns");
         plan[4].focus += " (Web)";
@@ -134,7 +268,6 @@ export function generatePlan(skills: Record<SkillCategory, string[]>): { day: nu
 }
 
 export function generateChecklist(skills: Record<SkillCategory, string[]>): { round: string; items: string[] }[] {
-    // Basic templates
     const round1 = ["Quantitative Aptitude (Time & Work, Speed)", "Logical Reasoning", "Verbal Ability", "Basic Debugging"];
     const round2 = ["Array/String Manipulation", "HashMaps & Sets", "Object Oriented Design Patterns", "Basic SQL Queries"];
     const round3 = ["Project Architecture Deep Dive", "API Design", "Database Schema Design"];
@@ -142,7 +275,6 @@ export function generateChecklist(skills: Record<SkillCategory, string[]>): { ro
 
     const allSkills = Object.values(skills).flat();
 
-    // Inject specific skills
     if (allSkills.includes("React")) round3.push("React Component Lifecycle & Hooks");
     if (allSkills.includes("Node.js")) round3.push("Event Loop & Async/Await");
     if (allSkills.includes("SQL")) round2.push("Joins, Indexing, Transactions");
@@ -160,7 +292,6 @@ export function generateQuestions(skills: Record<SkillCategory, string[]>): stri
     const questions: string[] = [];
     const flatSkills = Object.values(skills).flat();
 
-    // Default questions
     if (questions.length === 0) {
         questions.push("Tell me about yourself.");
         questions.push("Explain one challenging project you worked on.");
@@ -193,7 +324,6 @@ export function generateQuestions(skills: Record<SkillCategory, string[]>): stri
         questions.push("Detect a cycle in a linked list.");
     }
 
-    // Ensure we have at least 10, fill with generic if needed
     const generic = [
         "Explain the CAP theorem.",
         "What happens when you type a URL in the browser?",
@@ -220,6 +350,8 @@ export function analyzeJobDescription(text: string, role: string, company: strin
     const plan = generatePlan(extractedSkills);
     const checklist = generateChecklist(extractedSkills);
     const questions = generateQuestions(extractedSkills);
+    const companyIntel = generateCompanyIntel(company);
+    const roundFlow = generateRoundFlow(companyIntel.size, extractedSkills);
 
     const result: AnalysisResult = {
         id: uuidv4(),
@@ -230,6 +362,8 @@ export function analyzeJobDescription(text: string, role: string, company: strin
         extractedSkills,
         readinessScore: score,
         baseScore: score, // Initialize baseScore
+        companyIntel,
+        roundFlow,
         plan,
         checklist,
         questions
@@ -242,11 +376,8 @@ export function analyzeJobDescription(text: string, role: string, company: strin
 export function saveAnalysis(result: AnalysisResult) {
     const history = getHistory();
     history.unshift(result);
-    // Keep last 50 items
     if (history.length > 50) history.pop();
     localStorage.setItem('job_history', JSON.stringify(history));
-
-    // Also update a 'latest_score' for the dashboard to consume if needed
     localStorage.setItem('latest_readiness_score', result.readinessScore.toString());
 }
 
