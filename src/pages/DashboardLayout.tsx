@@ -40,6 +40,10 @@ export const DashboardLayout = () => {
                     <SidebarLink to="/dashboard/assessments" icon={BarChart} label="Assessments" />
                     <SidebarLink to="/dashboard/resources" icon={BookOpen} label="Resources" />
                     <SidebarLink to="/dashboard/profile" icon={User} label="Profile" />
+
+                    <div className="mt-8 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 px-4">Release</div>
+                    <SidebarLink to="/prp/07-test" icon={Code} label="Test Checklist" />
+                    <SidebarLink to="/prp/08-ship" icon={BarChart} label="Ship Project" />
                 </nav>
 
                 <div className="p-4 border-t border-gray-100">

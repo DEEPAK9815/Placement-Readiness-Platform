@@ -4,6 +4,8 @@ import { LandingPage } from './pages/LandingPage';
 import { DashboardLayout } from './pages/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import { Practice, Assessments, Resources, Profile } from './pages/DashboardPages';
+import { TestChecklist } from './pages/TestChecklist';
+import { ShipPage } from './pages/ShipPage';
 
 function App() {
   return (
@@ -16,6 +18,13 @@ function App() {
           <Route path="assessments" element={<Assessments />} />
           <Route path="resources" element={<Resources />} />
           <Route path="profile" element={<Profile />} />
+        </Route>
+        {/* New Routes for Testing & Shipping */}
+        <Route path="/prp/07-test" element={<DashboardLayout />}>
+          <Route index element={<TestChecklist />} />
+        </Route>
+        <Route path="/prp/08-ship" element={<DashboardLayout />}>
+          <Route index element={<ShipPage />} />
         </Route>
       </Routes>
     </Router>
