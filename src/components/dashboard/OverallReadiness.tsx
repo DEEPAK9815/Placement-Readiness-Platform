@@ -2,7 +2,11 @@ import React from 'react';
 import { Card } from '../ui/Card';
 
 export const OverallReadiness: React.FC = () => {
-    const score = 72;
+    // Read from localStorage or default to 35 (initial baseline)
+    const storedScore = localStorage.getItem('latest_readiness_score');
+    const score = storedScore ? parseInt(storedScore, 10) : 35;
+
+    // ... rest of component logic ...
     const radius = 80;
     const stroke = 12;
     const normalizedRadius = radius - stroke * 2;
