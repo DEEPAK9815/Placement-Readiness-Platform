@@ -2,13 +2,15 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-    variant?: 'primary' | 'secondary';
+    variant?: 'primary' | 'secondary' | 'ghost' | 'outline';
+    size?: 'default' | 'sm' | 'lg' | 'icon';
     isLoading?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({
     children,
     variant = 'primary',
+    size = 'default',
     isLoading = false,
     className = '',
     disabled,
@@ -18,12 +20,21 @@ export const Button: React.FC<ButtonProps> = ({
 
     const variants = {
         primary: "bg-[var(--color-accent)] text-white hover:opacity-90 focus:ring-[var(--color-accent)]",
-        secondary: "border border-[var(--color-accent)] text-[var(--color-accent)] bg-transparent hover:bg-[#8B00001A] focus:ring-[var(--color-accent)]"
+        secondary: "border border-[var(--color-accent)] text-[var(--color-accent)] bg-transparent hover:bg-[#8B00001A] focus:ring-[var(--color-accent)]",
+        ghost: "bg-transparent text-[var(--color-primary)] hover:bg-gray-100 focus:ring-[var(--color-accent)]",
+        outline: "border border-gray-300 bg-transparent text-[var(--color-primary)] hover:bg-gray-50 focus:ring-[var(--color-accent)]"
+    };
+
+    const sizes = {
+        default: "px-6 py-2",
+        sm: "px-3 py-1.5 text-sm",
+        lg: "px-8 py-3 text-lg",
+        icon: "p-2"
     };
 
     return (
         <button
-            className={`${baseStyles} ${variants[variant]} ${className}`}
+            className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
             disabled={isLoading || disabled}
             {...props}
         >

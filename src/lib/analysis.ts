@@ -10,9 +10,26 @@ export interface AnalysisResult {
     jdText: string;
     extractedSkills: Record<SkillCategory, string[]>;
     readinessScore: number;
+    baseScore?: number; // Store original calculated score
+    skillConfidenceMap?: Record<string, 'know' | 'practice'>; // User self-assessment
     plan: { day: number; focus: string; activities: string[] }[];
     checklist: { round: string; items: string[] }[];
     questions: string[];
+}
+
+export function updateAnalysis(updatedResult: AnalysisResult) {
+    const history = getHistory();
+    const index = history.findIndex(item => item.id === updatedResult.id);
+
+    if (index !== -1) {
+        history[index] = updatedResult;
+        localStorage.setItem('job_history', JSON.stringify(history));
+
+        // If this is the most recent one, update the latest score
+        if (index === 0) {
+            localStorage.setItem('latest_readiness_score', updatedResult.readinessScore.toString());
+        }
+    }
 }
 
 const KEYWORDS: Record<SkillCategory, string[]> = {
@@ -212,6 +229,7 @@ export function analyzeJobDescription(text: string, role: string, company: strin
         jdText: text,
         extractedSkills,
         readinessScore: score,
+        baseScore: score, // Initialize baseScore
         plan,
         checklist,
         questions

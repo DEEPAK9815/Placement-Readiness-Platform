@@ -1,7 +1,9 @@
-import React from 'react';
-import type { AnalysisResult } from '../../lib/analysis';
+import React, { useState, useEffect } from 'react';
+import { updateAnalysis, type AnalysisResult } from '../../lib/analysis';
 import { Card } from '../ui/Card';
-import { Calendar, Target, HelpCircle, ArrowLeft } from 'lucide-react';
+import { Calendar, Target, HelpCircle, ArrowLeft, Check, Copy, Download, Zap } from 'lucide-react';
+import { Button } from '../ui/Button';
+import { cn } from '../../lib/utils';
 
 interface AnalysisResultsProps {
     result: AnalysisResult;
@@ -9,83 +11,203 @@ interface AnalysisResultsProps {
 }
 
 export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, onBack }) => {
-    return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            <button onClick={onBack} className="flex items-center text-sm text-gray-500 hover:text-[var(--color-primary)] transition-colors mb-4">
-                <ArrowLeft className="w-4 h-4 mr-1" /> Back to Analysis
-            </button>
+    const [confidenceMap, setConfidenceMap] = useState<Record<string, 'know' | 'practice'>>(
+        result.skillConfidenceMap || {}
+    );
+    const [currentScore, setCurrentScore] = useState(result.readinessScore);
+    const [baseScore] = useState(result.baseScore || result.readinessScore);
 
-            {/* Header / Score */}
-            <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
-                <div>
-                    <h2 className="text-2xl font-serif font-bold text-[var(--color-primary)] mb-2">
-                        {result.role || "Job Role"} Analysis
-                    </h2>
-                    <p className="text-gray-500">{result.company ? `for ${result.company}` : 'Detailed Report'}</p>
-                    <div className="mt-4 flex flex-wrap gap-2">
+    useEffect(() => {
+        // Recalculate score based on confidence
+        let adjustment = 0;
+        Object.values(confidenceMap).forEach(status => {
+            if (status === 'know') adjustment += 2;
+            else if (status === 'practice') adjustment -= 2;
+        });
+
+        // Clamp between 0 and 100
+        const newScore = Math.min(100, Math.max(0, baseScore + adjustment));
+        setCurrentScore(newScore);
+
+        // Persist changes
+        const updatedResult = {
+            ...result,
+            skillConfidenceMap: confidenceMap,
+            readinessScore: newScore,
+            baseScore // Ensure baseScore is preserved
+        };
+        updateAnalysis(updatedResult);
+    }, [confidenceMap, baseScore, result]);
+
+    const toggleSkill = (skill: string) => {
+        setConfidenceMap(prev => {
+            const current = prev[skill] || 'practice';
+            return { ...prev, [skill]: current === 'know' ? 'practice' : 'know' };
+        });
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        // Could add a toast here
+    };
+
+    const downloadTxt = () => {
+        const content = `
+Job Analysis Report
+Role: ${result.role}
+Company: ${result.company}
+Readiness Score: ${currentScore}/100
+
+-- Top Skills --
+${Object.entries(result.extractedSkills).map(([cat, skills]) => `${cat}: ${skills.join(', ')}`).join('\n')}
+
+-- 7-Day Study Plan --
+${result.plan.map(d => `Day ${d.day}: ${d.focus}\n- ${d.activities.join('\n- ')}`).join('\n\n')}
+
+-- Interview Checklist --
+${result.checklist.map(r => `${r.round}\n- ${r.items.join('\n- ')}`).join('\n\n')}
+
+-- Top 10 Questions --
+${result.questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+        `;
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analysis-${result.role.replace(/\s+/g, '-')}.txt`;
+        a.click();
+    };
+
+    // Identify weak skills for "Action Next"
+    const practiceSkills = Object.keys(confidenceMap).filter(s => confidenceMap[s] === 'practice');
+    const topWeakSkills = practiceSkills.slice(0, 3);
+
+    return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Button variant="ghost" className="mb-4 pl-0 hover:pl-2 transition-all" onClick={onBack}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Analysis
+            </Button>
+
+            <div className="flex gap-6 items-stretch">
+                {/* Score Card */}
+                <Card className="w-1/3 flex flex-col items-center justify-center p-8 bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+                    <div className="relative">
+                        <svg className="w-40 h-40 transform -rotate-90">
+                            <circle
+                                cx="80"
+                                cy="80"
+                                r="70"
+                                stroke="currentColor"
+                                strokeWidth="12"
+                                fill="transparent"
+                                className="text-gray-200"
+                            />
+                            <circle
+                                cx="80"
+                                cy="80"
+                                r="70"
+                                stroke="currentColor"
+                                strokeWidth="12"
+                                fill="transparent"
+                                strokeDasharray={440}
+                                strokeDashoffset={440 - (440 * currentScore) / 100}
+                                className={cn(
+                                    "transition-all duration-1000 ease-out",
+                                    currentScore >= 70 ? "text-green-500" :
+                                        currentScore >= 40 ? "text-yellow-500" : "text-red-500"
+                                )}
+                            />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center flex-col">
+                            <span className="text-4xl font-bold">{Math.round(currentScore)}</span>
+                            <span className="text-xs text-gray-500 uppercase tracking-wider">Score</span>
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Key Skills */}
+                <Card className="flex-1 p-6">
+                    <div className="flex justify-between items-start mb-4">
+                        <h3 className="font-semibold text-lg flex items-center gap-2">
+                            <Target className="w-5 h-5 text-indigo-600" />
+                            Key Skills Extracted
+                        </h3>
+                        <div className="flex gap-2">
+                            <Button variant="outline" className="h-8 text-xs" onClick={downloadTxt}>
+                                <Download className="w-3 h-3 mr-1" /> TXT
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="space-y-4">
                         {Object.entries(result.extractedSkills).map(([category, skills]) => (
                             skills.length > 0 && (
-                                <div key={category} className="flex flex-col gap-1">
-                                    <span className="text-xs font-semibold text-gray-400 uppercase">{category}</span>
-                                    <div className="flex flex-wrap gap-1">
+                                <div key={category}>
+                                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{category}</span>
+                                    <div className="flex flex-wrap gap-2 mt-2">
                                         {skills.map(skill => (
-                                            <span key={skill} className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md text-xs font-medium">
+                                            <button
+                                                key={skill}
+                                                onClick={() => toggleSkill(skill)}
+                                                className={cn(
+                                                    "px-3 py-1 rounded-full text-sm border transition-all duration-200",
+                                                    confidenceMap[skill] === 'know'
+                                                        ? "bg-green-100 border-green-200 text-green-700 hover:bg-green-200"
+                                                        : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
+                                                )}
+                                                title={confidenceMap[skill] === 'know' ? "Stats: I know this (+2)" : "Stats: Need practice (-2)"}
+                                            >
                                                 {skill}
-                                            </span>
+                                                {confidenceMap[skill] === 'know' ? <Check className="w-3 h-3 inline ml-1" /> : null}
+                                            </button>
                                         ))}
                                     </div>
                                 </div>
                             )
                         ))}
                     </div>
-                </div>
-
-                <div className="flex flex-col items-center">
-                    <div className="relative w-32 h-32">
-                        <svg className="w-full h-full" viewBox="0 0 100 100">
-                            <circle
-                                className="text-gray-200 stroke-current"
-                                strokeWidth="8"
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill="transparent"
-                            ></circle>
-                            <circle
-                                className="text-[var(--color-accent)] progress-ring__circle stroke-current"
-                                strokeWidth="8"
-                                strokeLinecap="round"
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill="transparent"
-                                strokeDasharray={`${2 * Math.PI * 40}`}
-                                strokeDashoffset={`${2 * Math.PI * 40 * (1 - result.readinessScore / 100)}`}
-                                transform="rotate(-90 50 50)"
-                            ></circle>
-                        </svg>
-                        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-                            <span className="text-3xl font-bold text-[var(--color-primary)]">{result.readinessScore}</span>
-                        </div>
-                    </div>
-                    <span className="mt-2 text-sm font-medium text-gray-500">Readiness Score</span>
-                </div>
+                </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Action Next Box */}
+            <div className="bg-indigo-900 text-white rounded-xl p-6 flex justify-between items-center shadow-lg">
+                <div>
+                    <h4 className="flex items-center gap-2 font-semibold text-lg mb-1">
+                        <Zap className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                        Action Next
+                    </h4>
+                    <p className="text-indigo-200 text-sm">
+                        {topWeakSkills.length > 0
+                            ? `Focus on: ${topWeakSkills.join(', ')}`
+                            : "You're doing great! Ready for mock interviews?"}
+                    </p>
+                </div>
+                <Button className="bg-white text-indigo-900 hover:bg-indigo-50">
+                    Start Day 1 Plan Now
+                </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* 7-Day Plan */}
-                <Card title="7-Day Action Plan" className="h-full">
-                    <div className="space-y-6">
+                <Card className="p-6 h-fit">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-semibold text-lg flex items-center gap-2">
+                            <Calendar className="w-5 h-5 text-indigo-600" />
+                            7-Day Study Plan
+                        </h3>
+                        <Button variant="ghost" size="sm" onClick={() => copyToClipboard(JSON.stringify(result.plan, null, 2))}>
+                            <Copy className="w-4 h-4" />
+                        </Button>
+                    </div>
+                    {/* ... Plan rendering ... */}
+                    <div className="relative border-l-2 border-indigo-100 ml-3 space-y-8">
                         {result.plan.map((day) => (
-                            <div key={day.day} className="relative pl-6 border-l-2 border-indigo-100 last:border-0 hover:border-[var(--color-accent)] transition-colors">
-                                <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-[var(--color-accent)]"></div>
-                                <h4 className="font-semibold text-[var(--color-primary)]">Day {day.day}: {day.focus}</h4>
+                            <div key={day.day} className="relative pl-6">
+                                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-indigo-600"></span>
+                                <h4 className="font-medium text-gray-900">Day {day.day}: {day.focus}</h4>
                                 <ul className="mt-2 space-y-1">
-                                    {day.activities.map((activity, idx) => (
-                                        <li key={idx} className="text-sm text-gray-600 flex items-start">
-                                            <Calendar className="w-3 h-3 mr-2 mt-1 text-[var(--color-accent)] flex-shrink-0" />
-                                            {activity}
-                                        </li>
+                                    {day.activities.map((activity, i) => (
+                                        <li key={i} className="text-sm text-gray-600">• {activity}</li>
                                     ))}
                                 </ul>
                             </div>
@@ -93,38 +215,52 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, onBack
                     </div>
                 </Card>
 
-                {/* Questions & Checklist */}
-                <div className="space-y-8">
-                    <Card title="Likely Interview Questions">
-                        <div className="space-y-3">
-                            {result.questions.map((q, i) => (
-                                <div key={i} className="p-3 bg-gray-50 rounded-lg border border-gray-100 flex gap-3 items-start">
-                                    <HelpCircle className="w-5 h-5 text-[var(--color-accent)] flex-shrink-0 mt-0.5" />
-                                    <p className="text-sm text-gray-700 font-medium">{q}</p>
+                {/* Checklist & Questions */}
+                <div className="space-y-6">
+                    <Card className="p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-semibold text-lg flex items-center gap-2">
+                                <Target className="w-5 h-5 text-indigo-600" />
+                                Round Checklist
+                            </h3>
+                            <Button variant="ghost" size="sm" onClick={() => copyToClipboard(JSON.stringify(result.checklist, null, 2))}>
+                                <Copy className="w-4 h-4" />
+                            </Button>
+                        </div>
+                        <div className="space-y-4">
+                            {result.checklist.map((round, i) => (
+                                <div key={i} className="bg-gray-50 p-3 rounded-lg">
+                                    <h5 className="font-medium text-gray-800 text-sm mb-2">{round.round}</h5>
+                                    <div className="flex flex-wrap gap-2">
+                                        {round.items.map((item, j) => (
+                                            <span key={j} className="text-xs bg-white px-2 py-1 rounded border border-gray-200 text-gray-600">
+                                                {item}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     </Card>
 
-                    <Card title="Preparation Checklist">
-                        <div className="space-y-4">
-                            {result.checklist.map((round, i) => (
-                                <div key={i} className="border rounded-lg p-4">
-                                    <h4 className="font-semibold text-[var(--color-primary)] mb-3 flex items-center">
-                                        <Target className="w-4 h-4 mr-2" />
-                                        {round.round}
-                                    </h4>
-                                    <ul className="space-y-2">
-                                        {round.items.map((item, idx) => (
-                                            <li key={idx} className="flex items-center text-sm text-gray-600">
-                                                <div className="w-4 h-4 rounded-full border border-gray-300 mr-3 flex-shrink-0"></div>
-                                                {item}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            ))}
+                    <Card className="p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-semibold text-lg flex items-center gap-2">
+                                <HelpCircle className="w-5 h-5 text-indigo-600" />
+                                Likely Interview Questions
+                            </h3>
+                            <Button variant="ghost" size="sm" onClick={() => copyToClipboard(result.questions.join('\n'))}>
+                                <Copy className="w-4 h-4" />
+                            </Button>
                         </div>
+                        <ul className="space-y-3">
+                            {result.questions.map((q, i) => (
+                                <li key={i} className="flex gap-3 text-sm text-gray-700">
+                                    <span className="font-mono text-indigo-400 font-bold shrink-0">{i + 1}.</span>
+                                    {q}
+                                </li>
+                            ))}
+                        </ul>
                     </Card>
                 </div>
             </div>
