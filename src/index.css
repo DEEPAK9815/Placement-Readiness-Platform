@@ -1,66 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #F7F6F3;
-  --color-primary: #111111;
-  --color-accent: #8B0000;
-  --color-success: #4A6E48; /* Muted Green */
-  --color-warning: #B8860B; /* Muted Amber */
-  --color-border: #E5E5E5;
+  --color-background: #ffffff;
+  /* Reverting to white for standard SaaS look unless user kept off-white. Let's keep it clean. */
+  --color-primary: hsl(245, 58%, 51%);
+  /* Indigo/Purple from request */
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f3f4f6;
+  --color-secondary-foreground: #1f2937;
+  --color-accent: hsl(245, 58%, 51%);
+  /* Mapping accent to primary for now */
 
   --font-serif: "Playfair Display", serif;
+  /* Keeping these as they are nice */
   --font-sans: "Inter", sans-serif;
-
-  /* Custom Spacing - Overriding defaults or just adding specific ones? 
-     Tailwind v4 spacing is just values, but let's be explicit if we can.
-     Using standard spacing classes (p-2 = 0.5rem = 8px) usually works, 
-     but we need to ensure 8, 16, 24, 40, 64 scales.
-     8px = 0.5rem (p-2)
-     16px = 1rem (p-4)
-     24px = 1.5rem (p-6)
-     40px = 2.5rem (p-10)
-     64px = 4rem (p-16)
-  */
-
-  --text-heading: var(--font-serif);
-  --text-body: var(--font-sans);
 }
 
-/* Base Styles */
 @layer base {
   body {
-    background-color: var(--color-background);
-    color: var(--color-primary);
     font-family: var(--font-sans);
-    line-height: 1.6;
+    color: #1f2937;
     -webkit-font-smoothing: antialiased;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-serif);
-    font-weight: 700;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
-  }
-
-  h1 {
-    font-size: 2.5rem; /* 40px */
-    margin-bottom: 1.5rem; /* 24px */
-  }
-
-  h2 {
-    font-size: 2rem; /* 32px */
-    margin-bottom: 1rem; /* 16px */
-  }
-  
-  p {
-    max-width: 720px;
-    margin-bottom: 1rem;
-  }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
   }
 }
